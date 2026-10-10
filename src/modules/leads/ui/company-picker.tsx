@@ -18,18 +18,21 @@ export type CompanyChoice = { id: string | null; name: string };
 export function CompanyPicker({
   defaultId,
   defaultName,
+  defaultKnown = true,
   error,
   onChange,
 }: {
   defaultId?: string;
   defaultName?: string;
+  /** Whether a preselected company is already one of my branch's (false = another branch's). */
+  defaultKnown?: boolean;
   error?: string;
   onChange?: (choice: CompanyChoice) => void;
 }) {
   const listId = useId();
   const [name, setName] = useState(defaultName ?? "");
   const [chosen, setChosen] = useState<Suggestion | null>(
-    defaultId ? { id: defaultId, name: defaultName ?? "", area: null, city: null, known: true } : null,
+    defaultId ? { id: defaultId, name: defaultName ?? "", area: null, city: null, known: defaultKnown } : null,
   );
   const [found, setFound] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);

@@ -317,31 +317,42 @@ Prices are typed by people: there is no price list, because none has been approv
 
   `user.update` now includes branch changes.
 
-## 10. AI capture — Phase 3 (designed; not created yet)
+## 10. AI-assisted lead capture — Phase 3 ✅ (simulated providers)
 
-Voice in **English, Kannada and Hindi**, photos (visiting cards, enquiry letters) and pasted text. The interfaces and validation already exist in code (`src/modules/leads/capture.ts`).
+Photo (business card, company board), voice (**English, Kannada, Hindi**) and typed text. See SYSTEM_ARCHITECTURE §7 for the flow and the provider modes.
 
-### `lead_captures`
+### `lead_captures` (migration 0004)
 
 | Column | Notes |
 |---|---|
-| id, captured_by → users, branch_id (the capturer's) | |
-| method | `voice` \| `photo` \| `text` |
-| language | `en` \| `kn` \| `hi` \| `unknown` (detected) |
-| original_text | The transcript / OCR text **exactly as recognised, in the original language**. Kept permanently with the lead. |
-| attachment_id → attachments | The audio or image (retention period to be agreed with PTCC) |
-| draft jsonb | The **validated**, language-independent draft: English text, E.164 phones, ISO dates |
-| problems jsonb | Fields that could not be read |
-| provider, model, prompt_version, latency_ms | For measuring accuracy and cost |
-| status | `pending_review` \| `confirmed` \| `discarded` \| `failed` |
-| lead_id → leads | Set only when the person confirms (`createLead` with `capture_method`) |
-| reviewed_at, created_at | |
+| id, captured_by → users | Private to the person who captured it |
+| branch_id → branches | The capturer's home branch at the time (the lead's branch is what they confirm) |
+| method | `photo` | `voice` | `text` |
+| language | `en` | `kn` | `hi` | `unknown` (chosen for voice, detected from the script for text) |
+| provider, simulated, sample | `simulated` today. `sample` names the built-in sample a simulated result came from. |
+| media_type, media_bytes, media_sha256 | Fingerprint of the photo or recording. **The file itself is not stored**: no durable storage is configured. |
+| original_text | Exactly as recognised or typed, in its original language |
+| edited_text | The employee's corrected transcript, if they corrected it |
+| draft jsonb, problems jsonb | The validated, language-independent draft, and what couldn't be read. Cleared when the capture is confirmed or discarded. |
+| edited_fields jsonb | Which fields the employee changed before confirming (accuracy tracking) |
+| status | `draft` → `confirmed` (lead created) | `discarded` (cancelled or abandoned) | `failed` (couldn't be read) |
+| lead_id → leads | **Unique.** Set in the same transaction that creates the lead, so one capture can never make two leads. CHECK: confirmed ⇒ lead_id set. |
+| created_at, updated_at, confirmed_at, discarded_at | |
 
-- Nothing is created from a capture until a person reviews the prefilled form and saves it.
-- The branch is filled in only when the capture names an active branch exactly; otherwise the lead is saved as "Needs branch".
-- Comparing `draft` with the confirmed lead measures extraction accuracy per language.
+Indexes: `(captured_by, created_at)` for the rate limit, `(status, created_at)` for clean-up.
 
-### `attachments`
+Retention:
+- Text is cleared when a draft is cancelled. Drafts left more than 7 days are discarded and their text cleared (a development safeguard, not an approved policy).
+- Failed captures never store text.
+- Confirmed captures keep their original text (and any correction) with the lead, visible only to people who can see the lead. The draft is cleared on confirmation; the transcript is not copied anywhere else.
+- **Provisional:** confirmed transcripts are kept indefinitely because PTCC has not approved a retention policy. An approved policy is required before production use. No deletion period is assumed.
+
+`leads.capture_method` records `photo` / `voice` / `text` for leads created from a capture. The `lead.create` audit entry carries the capture id, method, language, provider, the simulated flag and the edited fields.
+
+### `attachments` (designed; not created)
+
+Needed once PTCC decides that capture photos and recordings (or other files) should be kept, with durable storage and a retention period.
+
 
 `(id, storage_key, file_name, mime_type, size_bytes, sha256, kind, uploaded_by, task_id | lead_id | company_id | parcel_id | job_id, created_at)`, with a CHECK that at most one parent is set.
 
@@ -414,6 +425,7 @@ Unchanged from the Phase 1 design:
 | `0001_multi_branch_marketing.sql` | Phase 2: branches, `users.branch_id`, `access_defaults_applied`, `company_branches` (backfilled from Phase 1 `lifecycle`/`owner_id`), `companies.normalized_name` (backfilled), `tasks.branch_id` (backfilled to the placeholder branch) and `tasks.lead_id`, the catalogue tables, leads, lead requirements, activities, quotations |
 | `0002_drop_company_lifecycle.sql` | Drops `companies.lifecycle` and `companies.owner_id`, now in `company_branches` |
 | `0003_branch_details.sql` | Adds `branches.maps_url` and `branches.description` (nullable; additive only) |
+| `0004_lead_captures.sql` | Phase 3: the `lead_captures` table (new table only) |
 
 The upgrade path (0000 → 0002 on a database containing Phase 1 data) was tested on a copy of the Phase 1 development database.
 

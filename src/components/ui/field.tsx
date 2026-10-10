@@ -95,12 +95,17 @@ export function Choice({
   legend,
   options,
   defaultValue,
+  value,
+  onChange,
   error,
 }: {
   name: string;
   legend: string;
   options: readonly ChoiceOption[];
   defaultValue?: string;
+  /** Controlled use: the selected value, with onChange. */
+  value?: string;
+  onChange?: (value: string) => void;
   error?: string;
 }) {
   return (
@@ -113,7 +118,9 @@ export function Choice({
               type="radio"
               name={name}
               value={option.value}
-              defaultChecked={option.value === defaultValue}
+              {...(value !== undefined
+                ? { checked: option.value === value, onChange: () => onChange?.(option.value) }
+                : { defaultChecked: option.value === defaultValue })}
               className="peer absolute inset-0 cursor-pointer opacity-0"
             />
             <span

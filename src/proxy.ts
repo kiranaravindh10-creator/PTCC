@@ -34,5 +34,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|brand/|icon.png|apple-icon.png|favicon.ico|robots.txt).*)"],
+  // `api/capture` (the capture upload) is skipped: for requests the proxy sees, Next.js buffers
+  // the body and reads all of it before the route runs, which would defeat the route's
+  // upload limit. The route checks the session itself.
+  matcher: ["/((?!_next/static|_next/image|brand/|icon.png|apple-icon.png|favicon.ico|robots.txt|api/capture/?$).*)"],
 };

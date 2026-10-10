@@ -8,6 +8,7 @@ import { FormSkeleton } from "@/components/ui/skeletons";
 import { canAny, scopeOf } from "@/server/access/actor";
 import { requireContext } from "@/server/auth/current";
 import { listActiveBranches } from "@/modules/customers/queries";
+import { canChooseAnyLeadBranch } from "@/modules/leads/access";
 import { listMarketers } from "@/modules/leads/queries";
 import { NewLeadForm } from "@/modules/leads/ui/new-lead-form";
 
@@ -42,9 +43,12 @@ async function NewLead() {
     marketersByBranch = Object.fromEntries(assignable.map((branch, i) => [branch.id, lists[i]!]));
   }
 
+  // A new lead goes to my own branch or "Not sure which branch"; only the CEO and Admin place it elsewhere.
+  const selectable = canChooseAnyLeadBranch(ctx.actor) ? branches : branches.filter((b) => b.id === ctx.actor.branchId);
+
   return (
     <NewLeadForm
-      branches={branches.map(({ id, name }) => ({ id, name }))}
+      branches={selectable.map(({ id, name }) => ({ id, name }))}
       defaultBranchId={ctx.actor.branchId ?? ""}
       marketersByBranch={marketersByBranch}
       actorId={ctx.actor.id}

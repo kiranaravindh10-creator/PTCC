@@ -165,17 +165,15 @@ describe("creating leads", () => {
     expect(requirement!.status.kind).toBe("not_confirmed");
   });
 
-  it("lets anyone capture a lead for another branch, and routes it to that branch's managers", async () => {
-    const { id } = await createLead(arun, {
-      companyName: "Coromandel Gauges",
-      area: "Ambattur",
-      requirement: "Temperature calibration",
-      branchId: chennai,
-    });
-    const lead = await getLead(arun, id); // the capturer can still see it
-    expect(lead).toMatchObject({ branchName: "Chennai", ownerId: null, capturedByName: "Arun Kumar" });
+  it("keeps a new lead in the employee's own branch — another branch's lead goes through “Not sure which branch”", async () => {
+    const lead = { companyName: "Coromandel Gauges", area: "Ambattur", requirement: "Temperature calibration" };
+    await expect(createLead(arun, { ...lead, branchId: chennai })).rejects.toBeInstanceOf(ForbiddenError);
+    const { id } = await createLead(arun, { ...lead, branchId: "" });
+    expect(await getLead(arun, id)).toMatchObject({ branchId: null, ownerId: null, capturedByName: "Arun Kumar" }); // the capturer can still see it
+    // The CEO decides the branch; then that branch's managers are asked to assign an owner.
+    await setLeadBranch(ceo, { leadId: id, branchId: chennai });
     expect((await inbox(karthik)).some((n) => n.entityId === id && n.type === "lead.needs_owner")).toBe(true);
-    // …but cannot work it.
+    // …and the capturer cannot work it.
     await expect(logCall(arun, { leadId: id, outcome: "connected" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 

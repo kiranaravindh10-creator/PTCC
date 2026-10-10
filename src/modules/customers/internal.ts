@@ -65,7 +65,15 @@ export async function markCustomerOfBranch(
  */
 export async function findOrCreateContact(
   tx: Transaction,
-  input: { companyId: string; name?: string | null; phone?: string | null; email?: string | null; actorId: string },
+  input: {
+    companyId: string;
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    /** Used only when a new contact is created — an existing contact's details are not changed. */
+    designation?: string | null;
+    actorId: string;
+  },
 ): Promise<{ id: string; name: string; phone: string | null } | null> {
   const name = input.name?.trim() || null;
   const phone = input.phone ?? null;
@@ -104,6 +112,7 @@ export async function findOrCreateContact(
       name: name ?? "Contact",
       phone,
       email: input.email ?? null,
+      designation: input.designation?.trim() || null,
       isPrimary: existing === 0,
       createdBy: input.actorId,
       updatedBy: input.actorId,

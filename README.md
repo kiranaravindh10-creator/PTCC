@@ -8,12 +8,19 @@ One application in which every employee sees their work for the day — and mana
 whole company — built on shared records instead of disconnected ERP modules. Start with
 [docs/PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md).
 
-**Status:** Phase 1 (foundation) is verified. Phase 2 is built, has passed a verification pass, and is awaiting PTCC's approval:
-- multi-branch platform with branch isolation and a CEO view across branches;
-- PTCC's NABL accredited scope as a searchable catalogue;
+**Status:** Phases 1 and 2 are verified. Phase 2 covers:
+- the multi-branch platform with branch isolation and a CEO view across branches;
+- PTCC's NABL scope as a searchable catalogue;
 - central customers;
-- the marketing pipeline: leads, calls, follow-ups, quotations, won → customer;
-- Tally and AI-capture integration boundaries.
+- the marketing pipeline;
+- the Tally boundary.
+
+**Phase 3 (AI-assisted lead capture)** is built with **simulated** providers and awaits review:
+- photo, voice (English, Kannada, Hindi) and typed capture;
+- one review form;
+- the lead is created only on confirmation.
+
+No real OCR or speech service is connected; see below.
 
 See [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md).
 
@@ -49,6 +56,14 @@ All sample accounts use the password `precise2026`.
 These people are fictional sample data. The branches are real:
 - Bengaluru, Chennai and Hosur come from the NABL certificates (`data/scope/`).
 - Hyderabad comes from the branch details PTCC supplied (`data/branches/`). Its accreditation is not verified yet.
+
+### Lead capture: simulated today
+
+`/leads/capture` reads a photo, a recording or a few typed words into a draft the employee confirms. No real recognition service is connected. `CAPTURE_PROVIDER` (see `.env.example`) selects:
+- `simulated` (default in development and tests): built-in samples, clearly labelled. Photo and voice results come from a sample you pick, never from your actual photo or voice.
+- `off` (always in production for now): the screen says capture isn't available yet.
+
+Tests use the simulated providers and need no API keys or paid services. Photos and recordings are not stored. A confirmed transcript stays with its lead — provisionally, until PTCC approves a retention policy. Details, and what's needed for real providers: [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) §7.
 
 > The local database is single-process: **stop `npm run dev` before running any `db:*` script**
 > (a lock file turns the mistake into a clear error).

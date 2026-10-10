@@ -1,8 +1,10 @@
+import { Plus, ScanText } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { ButtonLink } from "@/components/ui/button";
 import { Notice, Skeleton } from "@/components/ui/display";
 import { Tabs } from "@/components/ui/tabs";
-import { can, scopeOf } from "@/server/access/actor";
+import { can, canAny, scopeOf } from "@/server/access/actor";
 import { requireContext } from "@/server/auth/current";
 import { firstName } from "@/lib/format";
 import { companyToday, formatLongDate, greetingFor } from "@/lib/time";
@@ -56,6 +58,19 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
         {formatLongDate(ctx.now)}
         {actor.branchName ? ` · ${actor.branchName} branch` : ""}
       </p>
+      {/* Employees in the field: met a company that needs calibration? Capture it in seconds, or use the form. */}
+      {actor.branchId && !can(actor, "overview.company") && canAny(actor, "lead.capture", "marketing.work") && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ButtonLink href="/leads/capture" variant="secondary" className="max-sm:flex-1">
+            <ScanText aria-hidden />
+            Capture lead
+          </ButtonLink>
+          <ButtonLink href="/leads/new" variant="secondary" className="max-sm:flex-1">
+            <Plus aria-hidden />
+            Add lead
+          </ButtonLink>
+        </div>
+      )}
       {params.welcome && (
         <div className="mt-4 max-w-xl">
           <Notice tone="success">Your password is set. Welcome to PTCC.</Notice>

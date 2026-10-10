@@ -31,7 +31,7 @@ Changing an ID in a URL or an API request never reveals a record outside your sc
 | Accounts | `accounts` | Payment follow-up and business status; accounting stays in Tally | One branch | Desktop |
 
 - **Admin** administers the system. It sees leads company-wide **only to route them**: it can set or change a lead's branch and assign or reassign its owner (`lead.route`), and every routing action is audited. It cannot work leads (calls, stages, quotations, won/lost) or open the customer pages. A person who needs more can be given more roles.
-- **Branch coordinators and marketing managers** assign and reassign the leads of their own branch (confirmed by PTCC). The CEO decides the branch of leads whose branch is unknown.
+- **Branch coordinators and marketing managers** assign and reassign the leads of their own branch (confirmed by PTCC). The CEO decides the branch of leads whose branch is unknown; Admin can also route them. Both are notified when such a lead is added.
 
 ## 2. What each role sees
 
@@ -48,7 +48,7 @@ Changing an ID in a URL or an API request never reveals a record outside your sc
 | Operations / Lab | Own work | ✓ | Leads I added | Branch | Branch | ✓ | Soon | — |
 | Accounts | Own work | ✓ | Leads I added | Branch | — | ✓ | Soon | — |
 
-Everyone can **add a lead** (`lead.capture`), for any branch or with the branch marked "Not sure". People who do not work leads only see the leads they added.
+Everyone can **add a lead** (`lead.capture`), with the form or by capture, **for their own branch** — or with the branch marked **"Not sure which branch"**, which the CEO or Admin then routes. Only the CEO and Admin can add a lead straight to another branch (confirmed by PTCC in the Phase 3 review). People who do not work leads only see the leads they added.
 
 ### Home, per role
 
@@ -88,7 +88,7 @@ Permission **keys** are defined in code (`src/server/access/permissions.ts`) bec
 | `customer.read` | See customers linked to my branch (and search all names, to avoid duplicates) |  |  | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `customer.read.all` | See every customer and its relationships with all branches | ✓ |  |  |  |  |  |  |  |
 | `customer.write` | Add and edit customers and contacts; link a customer to my branch | ✓ |  | ✓ | ✓ | ✓ |  |  |  |
-| `lead.capture` | Add a lead for any branch (or mark its branch as unknown) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `lead.capture` | Add a lead for my branch (or mark its branch as unknown, to be routed) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `marketing.read.own` | See leads I own or added |  |  |  |  | ✓ |  |  |  |
 | `marketing.read.branch` | See all leads, calls and quotations in my branch |  |  | ✓ | ✓ |  |  |  |  |
 | `marketing.read.all` | See leads of every branch, including leads waiting for a branch | ✓ |  |  |  |  |  |  |  |
@@ -145,11 +145,13 @@ Scopes are applied **inside the SQL query**, not after it. A list query for some
 | Work: start, mark collected/delivered, complete, comment | The assignee (`task.work`), or `task.manage` covering the work's branch |
 | Work: assign / reassign | `task.assign` covering the work's branch; with `.branch`, only to people of that branch. With `.all`, assigning someone of another branch moves the work to their branch (audited). |
 | Work: create in another branch | `task.assign.all` only |
+| Lead: add (form or capture) | Its branch is the person's own branch (the default) or none — "Not sure which branch", routed by the CEO or Admin. Another branch only with `marketing.assign.all` (CEO) or `lead.route` (Admin); the branch is recorded in the `lead.create` audit entry. Checked on the server for both the form and capture confirmation; a branch is never inferred from an address, a phone number or AI output. |
 | Lead: work it (call, note, follow-up, stage, requirement, quotation, won/lost) | Its owner (`marketing.work`); the person who added it while it has no owner; or `marketing.assign` covering its branch |
 | Lead: assign / reassign | `marketing.assign` covering its branch (Coordinator, Marketing manager: own branch; CEO: any), or `lead.route` (Admin: any). Always to a marketer (`marketing.work`) **of the lead's branch**. Audited. |
 | Lead: set or change its branch | `marketing.assign.all` (CEO) or `lead.route` (Admin). Audited. |
 | Lead: reopen a lost lead | `marketing.assign` covering its branch |
 | Follow-ups | Only once the lead has a branch and an owner: a follow-up is work for the owner |
+| Lead capture (photo, voice, text) | Anyone who may add a lead (`lead.capture` or `marketing.work`). A capture is private to the person who made it until they confirm it. Confirming applies exactly the same branch and owner rules as the form; cancelling discards it. The confirmed transcript stays with the lead, visible to people who can see the lead. |
 | Customer: add, edit, add contact, set my branch's relationship | `customer.write` (to the person's own branch unless `customer.read.all`) |
 | People: add, set branch and roles, reset password, deactivate | `user.manage`. People with any branch-level role must have a branch. |
 | Branches: add, edit, mark verified, deactivate | `branch.manage`. A branch with active people cannot be deactivated. |
@@ -158,11 +160,13 @@ Scopes are applied **inside the SQL query**, not after it. A list query for some
 
 The brief's rule is: lead → branch → marketing team → assigned employee.
 
+A new lead's branch is the employee's own, or "Not sure which branch". Only the CEO and Admin add a lead straight to another branch (rule 2 then applies).
+
 1. **Branch known, added by one of its marketers:** that marketer owns it.
 2. **Branch known, added by anyone else:** it waits under *Needs owner*. That branch's lead managers are notified: people with `marketing.assign.branch` there (Coordinator, Marketing manager). A manager assigns it to a marketer of that branch.
-3. **Branch not known** ("Not sure — needs assignment", or an AI capture that does not name a branch exactly): it waits under *Needs branch*. People with `marketing.assign.all` (the CEO) are notified and decide the branch; Admin can also route it (`lead.route`). Rule 2 then applies.
+3. **Branch not known** ("Not sure which branch", from the form or a capture — including a lead that belongs to another branch): it waits under *Needs branch*. People with `marketing.assign.all` (the CEO) or `lead.route` (Admin) are notified — once each, never about a lead they added themselves — and either of them sets the branch. Rule 2 then applies.
 
-Admin can route or reassign any lead at any step. Each change is in the activity log (`lead.branch`, `lead.assign` with before/after) and in the lead's own history. Tests: `tests/phase2-rules.test.ts` ("lead routing").
+Admin can route or reassign any lead at any step. Each change is in the activity log (`lead.branch`, `lead.assign` with before/after) and in the lead's own history. Tests: `tests/phase2-rules.test.ts` ("lead routing"), `tests/lead-branch-ownership.test.ts`.
 
 The system never guesses a branch.
 

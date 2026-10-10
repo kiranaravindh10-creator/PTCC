@@ -27,6 +27,22 @@ export function canRouteLeads(actor: Actor): boolean {
   return can(actor, "lead.route");
 }
 
+/** People who may place a lead in any branch: company-wide routers (CEO, Admin). */
+export function canChooseAnyLeadBranch(actor: Actor): boolean {
+  return scopeOf(actor, "marketing.assign") === "all" || canRouteLeads(actor);
+}
+
+/**
+ * Which branch a NEW lead may be created under (manual form and capture alike). Everyone may
+ * use their own branch, or null — "Not sure which branch", which goes through the unassigned-
+ * lead process. Only company-wide routers may create a lead directly under another branch.
+ * Moving a lead later is setLeadBranch (CEO, Admin); assigning it is the branch's managers.
+ */
+export function canCreateLeadInBranch(actor: Actor, branchId: string | null): boolean {
+  if (branchId === null || branchId === actor.branchId) return true;
+  return canChooseAnyLeadBranch(actor);
+}
+
 /** Calls, follow-ups, stages, requirements, quotations, won/lost. */
 export function canWorkLead(actor: Actor, lead: LeadAccessFacts): boolean {
   if (canManageBranchLeads(actor, lead.branchId)) return true;

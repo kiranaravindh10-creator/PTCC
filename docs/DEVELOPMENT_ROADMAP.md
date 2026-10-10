@@ -84,15 +84,40 @@ when work is assigned to them. Admins can onboard people and set their roles.
 - Range search is text only (no "is 650 bar covered?").
 - Hyderabad has no accredited scope until its NABL certificate and scope are provided.
 
-## Phase 3 — AI lead capture ⏳
+## Phase 3 — AI-assisted lead capture 🚧 (built with simulated providers, 10 October 2026; awaiting your review)
 
-- *Add lead* by **Voice** (English, Kannada, Hindi), **Photo** (visiting card, enquiry letter) or **Text**. Interfaces and validation are already in `src/modules/leads/capture.ts`.
-- Storage adapter + attachments; `lead_captures` keeps the original transcript in its language
-- Review screen: prefilled New lead form with uncertain fields highlighted and a duplicate check → person confirms → `createLead`
-- Branch filled in only on an exact match; otherwise "Needs branch"
-- Accuracy tracking per language (draft vs confirmed)
+| Area | Scope |
+|---|---|
+| Capture screen | `/leads/capture`, mobile-first: **Photo** (take, upload, replace, remove), **Speak** (English / ಕನ್ನಡ / हिन्दी; record, stop, cancel, re-record), **Type**. **Capture lead** sits beside **Add lead** on the Leads page and on branch employees' Home; the manual form stays. |
+| Providers | `CAPTURE_PROVIDER=simulated` (development and tests: built-in samples, clearly labelled) or `off` (production: "not available yet"). No real OCR, speech-to-text or AI service is connected, and nothing is sent outside. |
+| Review | One review form for all three methods. Shows field origin tags, possible duplicates (only what you may see), branch (your own, or "Not sure which branch"; never inferred), owner, and an explicit follow-up suggestion. Then **Confirm and create lead**, or Cancel. |
+| Saving | Only confirmation creates a lead, through the manual form's checks, in one transaction. Exactly one lead per capture, even on retries or double taps. Nothing half-saved on failure. |
+| Privacy | Photos and recordings are checked (type, size, signature), fingerprinted and dropped: no durable storage exists. Captured text is cleared on cancel and after 7 days if abandoned. A confirmed transcript stays with the lead — **provisionally**, until PTCC approves a retention policy. 30 captures per person per hour. |
+| Lead page | Shows how the lead was captured, with the original transcript and any correction, to people who can see the lead. |
+| Review refinements (PTCC) | New leads — form or capture — go to the employee's own branch or "Not sure which branch"; only the CEO and Admin add a lead straight to another branch. Enforced on the server. A lead with no branch notifies both the CEO and Admin. (`tests/lead-branch-ownership.test.ts`) |
 
-**Needs:** AI provider choice and keys (speech-to-text that handles Kannada and Hindi); PTCC's approval of where audio is processed; sample recordings for evaluation.
+**Exit criteria**
+- [x] Tests:
+  - photo, voice and typed paths;
+  - English, Kannada and Hindi;
+  - simulated providers;
+  - failed and cancelled processing;
+  - missing and uncertain fields;
+  - edited fields, duplicates and branch authorisation;
+  - confirmation required, with exactly one lead and repeat protection;
+  - audit, upload validation and privacy clean-up.
+
+  *(`src/modules/leads/capture.test.ts`, `tests/capture.test.ts`, `tests/lead-branch-ownership.test.ts`.)*
+- [x] Lint, type-check, all tests and build pass. The capture flow has been checked in the browser at 360 px and 1440 px.
+- [ ] Approved by PTCC.
+- [ ] Real providers chosen and connected (separate decision, below).
+
+**Needs, to go beyond simulation:**
+- PTCC's choice of OCR, speech-to-text (must handle Kannada and Hindi) and extraction providers, plus their keys;
+- approval of what is sent to them and where it is processed;
+- a decision on keeping photos and recordings (durable storage and a retention period);
+- an approved retention policy for confirmed transcripts (kept with the lead until then);
+- sample recordings and cards to measure accuracy.
 
 ## Phase 4 — Collections ⏳
 

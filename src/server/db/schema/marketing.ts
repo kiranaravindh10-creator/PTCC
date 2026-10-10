@@ -1,15 +1,21 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, date, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import {
   ACTIVITY_KINDS,
+  AI_CAPTURE_METHODS,
   CALL_OUTCOMES,
   CAPTURE_METHODS,
+  CAPTURE_STATUSES,
+  DETECTED_LANGUAGES,
   LEAD_SOURCES,
   LEAD_STAGES,
   QUOTATION_STATUSES,
   type ActivityKind,
+  type AiCaptureMethod,
   type CallOutcome,
   type CaptureMethod,
+  type CaptureStatus,
+  type DetectedLanguage,
   type LeadSource,
   type LeadStage,
   type QuotationStatus,
@@ -189,5 +195,58 @@ export const quotationLines = pgTable(
     index("quotation_lines_quotation_idx").on(t.quotationId, t.position),
     check("quotation_lines_quantity_check", sql`${t.quantity} > 0`),
     check("quotation_lines_amount_check", sql`${t.unitPricePaise} >= 0 and ${t.amountPaise} = ${t.unitPricePaise} * ${t.quantity}`),
+  ],
+);
+
+/**
+ * AI-assisted lead captures (Phase 3) — docs/DATABASE_ARCHITECTURE.md §10. A capture stays a
+ * draft until the employee confirms it; confirming creates exactly one lead (lead_id is unique).
+ * Photos and recordings are NOT stored: only a fingerprint (type, size, SHA-256) is kept.
+ * The recognised text is kept with a confirmed lead (shown only to people who can see the lead)
+ * and cleared when a draft is cancelled or abandoned. Keeping it with the lead indefinitely is
+ * PROVISIONAL — PTCC has not approved a retention policy yet (docs/DATABASE_ARCHITECTURE.md §10).
+ */
+export const leadCaptures = pgTable(
+  "lead_captures",
+  {
+    id: id(),
+    capturedBy: userRef(() => users.id).notNull(),
+    /** The capturer's home branch at the time (not the lead's branch, which they confirm). */
+    branchId: uuid().references(() => branches.id, { onDelete: "restrict" }),
+    method: text().$type<AiCaptureMethod>().notNull(),
+    language: text().$type<DetectedLanguage>().notNull().default("unknown"),
+    /** "simulated", or the name of a real provider once one is connected. */
+    provider: text().notNull(),
+    simulated: boolean().notNull(),
+    /** Simulated captures only: which built-in sample produced the result. */
+    sample: text(),
+    mediaType: text(),
+    mediaBytes: integer(),
+    mediaSha256: text(),
+    /** Exactly as recognised or typed, in its original language. */
+    originalText: text(),
+    /** The employee's correction of a transcript, if any. */
+    editedText: text(),
+    draft: jsonb().$type<Record<string, unknown>>(),
+    problems: jsonb().$type<string[]>(),
+    /** Fields the employee changed before confirming (for accuracy tracking). */
+    editedFields: jsonb().$type<string[]>(),
+    status: text().$type<CaptureStatus>().notNull().default("draft"),
+    error: text(),
+    leadId: uuid().references(() => leads.id, { onDelete: "restrict" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    confirmedAt: timestamp({ withTimezone: true }),
+    discardedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("lead_captures_lead_unique").on(t.leadId),
+    index("lead_captures_captured_by_idx").on(t.capturedBy, t.createdAt),
+    index("lead_captures_status_idx").on(t.status, t.createdAt),
+    check("lead_captures_method_check", inList(t.method, AI_CAPTURE_METHODS)),
+    check("lead_captures_language_check", inList(t.language, DETECTED_LANGUAGES)),
+    check("lead_captures_status_check", inList(t.status, CAPTURE_STATUSES)),
+    check("lead_captures_confirmed_check", sql`${t.status} <> 'confirmed' or ${t.leadId} is not null`),
+    check("lead_captures_media_bytes_check", sql`${t.mediaBytes} is null or ${t.mediaBytes} > 0`),
   ],
 );

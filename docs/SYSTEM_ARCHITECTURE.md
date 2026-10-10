@@ -189,12 +189,23 @@ PTCC's four branches run on **one** application and **one** database. There are 
 
 ### JSON endpoints
 
-Two read-only Route Handlers serve interactive pickers:
+Route Handlers serve interactive screens:
 
 - `GET /api/catalogue/search?q=` returns scope search results.
 - `GET /api/companies/suggest?q=` returns company name suggestions (id, name, area, city, and whether the company is already linked to my branch).
+- `POST /api/capture` starts a lead capture (multipart: photo, recording or text). It returns a draft and never creates a lead (§7).
+- `GET /api/capture/duplicates` returns possible duplicates for the capture review.
 
-Both resolve the session with `getContextOrNull()`, answer `401` without one (`proxy.ts` also refuses cookie-less `/api/*` calls), apply the same permission checks as pages, and send `Cache-Control: no-store`.
+All of them:
+
+- resolve the session with `getContextOrNull()`;
+- answer `401` without one (`proxy.ts` also refuses cookie-less `/api/*` calls, except `/api/capture` — see below);
+- apply the same permission checks as pages;
+- send `Cache-Control: no-store`.
+
+`POST` handlers also require a same-origin `Origin` header (`src/server/http.ts`), since Route Handlers don't get the Server Action origin check.
+
+`POST /api/capture` limits its body **while reading it** (`readBodyWithin`): 8 MB for the file plus 512 KB for the other form fields, whether or not `Content-Length` is sent. It stops reading at the limit and answers `413`; refusals that leave the upload unread close the connection instead of draining it. The proxy skips this route, because Next.js buffers and fully reads the body of every request the proxy sees before the route runs — which would defeat the limit. The route checks the session itself before reading anything.
 
 ## 6. Data flow for a mutation (Server Action)
 
@@ -226,29 +237,85 @@ and shown as a generic message.
 
 ## 7. AI architecture (Phases 3 and 7)
 
-### Lead capture: voice (English, Kannada, Hindi), photo, text
+### Lead capture (Phase 3): photo, voice (English, Kannada, Hindi), typed text
 
-The interfaces and validation exist today in `src/modules/leads/capture.ts` and are unit-tested. The providers in `src/server/integrations/ai` are **not connected**: every call fails with a clear "isn't connected yet" message, and no screen offers AI capture yet.
+**Status: built with simulated providers. No real OCR, speech-to-text or AI extraction service is connected.**
 
 ```
- voice (en / kn / hi, or mixed) ── SpeechToText.transcribe ─┐
- photo (visiting card, letter) ── ImageToText.read (OCR) ───┼─► OriginalCapture { method, language, text }
- typed / pasted text ───────────────────────────────────────┘        kept as recognised, in its language
-                                                                    │
-                                          LeadExtractor.extract ─► unknown (untrusted)
-                                                                    │ validateDraft: field by field; bad
-                                                                    ▼ fields dropped and reported
-                              LeadDraft: English text, E.164 phones, ISO dates + "uncertain" fields
-                                                                    │ draftToLeadForm: branch only on an
-                                                                    ▼ exact active-branch match, else ""
-             New lead form, prefilled ─► the person reviews and corrects ─► leads.service.createLead(ctx, …)
-                                                                             (same checks as manual entry)
+ /leads/capture (mobile-first)            POST /api/capture (multipart; signed in; same origin)
+ ─ Photo: take / upload / replace ──────►  startCapture: permission · rate limit · file type, size and
+ ─ Speak: language + record (or sample) ─►    content checked · photo/recording fingerprinted, then DROPPED
+ ─ Type: a few sentences ───────────────►    providers (CAPTURE_PROVIDER) → original text + validated draft
+                                             saved as a DRAFT lead_captures row — never a lead
+                      ◄─────────────────── draft + problems + "simulated" label
+ Review form (one for all three):
+  · every field tagged: from capture · check this · not in capture · edited by you
+  · possible duplicates (GET /api/capture/duplicates) — only what this person may see
+  · branch = the employee's own; a branch the capture names is only a hint
+  · follow-up words ("next Tuesday") → an explicit date the employee must accept
+  ─ Confirm and create lead ─► confirmCaptureAction → confirmCapture: one transaction —
+                                createLeadInTx (the manual form's checks) + capture marked confirmed
+  ─ Cancel ──────────────────► discardCaptureAction → draft discarded, its text cleared
 ```
 
-- **Language-independent storage.** The lead's fields are canonical, whatever language was spoken. The original transcript is stored unchanged with the lead (`lead_captures.original_text`, DATABASE_ARCHITECTURE §10), so a Kannada or Hindi speaker's words are never lost or silently rewritten.
-- **Speech-to-text** must handle Indian English, Kannada and Hindi, including code-mixed speech. Provider choice is open. Candidates must be evaluated on recorded PTCC calls; customer names and phone numbers are personal data, so where audio is processed needs PTCC's approval.
-- **No silent creation.** AI never writes records. Services mentioned are search hints; the person picks scope rows, and a free-text requirement stays "Scope not confirmed".
-- **Branch never guessed.** If the capture does not name an active branch exactly, the lead is saved as "Needs branch" and goes to the CEO.
+**Providers** (`src/server/integrations/ai`), chosen by `CAPTURE_PROVIDER`:
+
+| Mode | When | Photo | Voice | Typed text |
+|---|---|---|---|---|
+| `simulated` | Default in development and tests. **Refused in production.** | The result of a built-in sample the employee picks (business card, company board, or a simulated failure). The photo is checked and fingerprinted, not read. | A built-in sample transcript in the chosen language (English, Kannada, Hindi), or "nothing recognised". A recording, if made, is checked and fingerprinted, not transcribed. | The three sample texts (one per language) return prepared fields. Any other text gets only phone numbers, emails, websites and clear date words, found by fixed patterns. |
+| `off` | Always in production for now | Not available | Not available | Not available |
+
+The screen labels simulated results as simulated everywhere: the chooser, the sample pickers, the review form and the lead page. Sample companies and people are fictional, with `.example` addresses and 90000 900xx numbers.
+
+**Rules the code enforces** (`src/modules/leads/capture.ts`, `capture-service.ts`; tests: `src/modules/leads/capture.test.ts`, `tests/capture.test.ts`):
+
+- **AI never creates or changes records.** A capture is a draft. Only "Confirm and create lead" creates a lead.
+  - It runs `createLeadInTx`: the same validation, permission, branch and owner checks as the manual form. A payload naming another branch, another branch's owner, or a made-up branch is refused exactly as on the form.
+  - Confirming twice (double tap, retry, second tab) returns the same lead. The capture row is locked and `lead_captures.lead_id` is unique.
+  - A failure anywhere rolls everything back, so there is never a half-saved lead.
+  - Existing customers' records are not changed. Choosing an existing company reuses it as-is.
+  - AI can't mark leads won, issue quotations or set prices: capture only ever creates a new, open lead.
+- **Nothing is invented.**
+  - Untrusted provider output is validated field by field; bad fields are dropped and reported.
+  - A business card has no requirement, and a company board has no person, phone or email, so those stay empty.
+  - The requirement is still mandatory, as on the form; the employee types it.
+- **Dates:** "tomorrow", "next Tuesday" and similar become an explicit date in Asia/Kolkata time. They are shown as a suggestion and scheduled only if the employee accepts it. "Next Tuesday" is flagged as ambiguous.
+- **Branch:**
+  - A new lead — form or capture — goes to the employee's own branch (the default) or "Not sure which branch", which follows the existing Needs-branch process: the CEO and Admin are notified (`companyWideLeadRouters`), and either routes it. Only the CEO (`marketing.assign.all`) and Admin (`lead.route`) may create a lead straight in another branch. `canCreateLeadInBranch` (`src/modules/leads/access.ts`) is checked in `createLeadInTx`, so a changed payload can't get round it; the form and the review screen offer only the branches allowed.
+  - It is never inferred from a phone number, an address or AI output: a Hosur address captured by a Bengaluru employee stays a Bengaluru lead.
+  - A branch the speaker names exactly is shown as a hint only. The CEO and Admin can apply it; anyone else is told to choose "Not sure which branch" if the lead belongs there.
+  - Tests: `tests/lead-branch-ownership.test.ts`.
+- **Duplicates:**
+  - Companies are matched by name, phone and email.
+  - A company outside the employee's visibility shows name and place only, so it can be reused without revealing its business.
+  - Open leads appear only if the employee may see them.
+  - Nothing is merged automatically. The server still refuses an exact duplicate company name.
+- **Languages:** the language is chosen (voice) or detected from the script (typed text). The original transcript or text is kept unchanged with the lead. A corrected transcript is stored separately. The lead's fields are canonical (English text, E.164 phone numbers, ISO dates).
+- **Privacy and storage:**
+  - **No durable file storage is configured, so photos and recordings are not stored.** Only their type, size and SHA-256 are kept.
+  - Recognised text (and the employee's correction) is kept with a confirmed lead and shown on the lead page only to people who can see the lead (`getLeadCaptureInfo` applies `leadVisibility`). It is not copied into the lead's history, tasks, notifications or the audit log, and the draft fields are cleared on confirmation.
+  - **Retention is provisional.** Confirmed transcripts are kept for as long as the lead exists because PTCC has not approved a retention policy yet. A policy (period, and who may delete) must be approved before capture is used in production; none is assumed here.
+  - Text is cleared when a draft is cancelled. Drafts nobody confirms are cleared after 7 days — a development safeguard, not an approved policy.
+  - Captures are private to the person who made it.
+  - Nothing is sent to any external service. Raw text, images and audio are not logged.
+- **Abuse controls:**
+  - 30 captures per person per hour (failed ones count);
+  - photos and recordings up to 8 MB, checked by type and file signature; the request body is capped while it is read (§5);
+  - text up to 2,000 characters;
+  - recordings up to 2 minutes;
+  - same-origin check and session required on the API (401 without a session).
+
+**To connect real providers later** (needs PTCC's approval first):
+1. Choose providers for:
+   - OCR of cards and boards;
+   - speech-to-text that handles Indian English, **Kannada** and **Hindi**, including mixed speech. If a provider can't do one of these, the screen must say so for that language.
+   - field extraction.
+2. Implement them as a new mode returning the same `CaptureProviders` interface. Keys go in environment variables; nothing reaches the browser.
+3. Agree what is sent to the provider, where it is processed, and how long the provider keeps it. Document the data flow.
+4. Decide whether originals should be kept. If yes, configure durable storage (an S3-compatible bucket with signed URLs) and a retention period. Until then they are not stored.
+5. Evaluate accuracy on real PTCC captures per language. Record which fields people edit; this is already captured in `lead_captures.edited_fields`.
+
+The screens, review form, confirmation and tests don't change.
 
 **Ask PTCC** uses LLM tool calling where each tool is a thin wrapper around an existing
 query/service function executed with the asking user's `ctx`:
@@ -271,7 +338,7 @@ adapter decides whether anything is sent. No feature breaks because a credential
 | Google Maps | `maps.directionsUrl()`, later `geocode()`, `planRoute()` | Maps URLs deep links (work today) | Places autocomplete, geocoding, multi-stop optimisation |
 | WhatsApp | `NotificationChannel.send()` | In-app only; click-to-chat links | Template messages via Cloud API; delivery status webhooks → `notification_deliveries` |
 | Storage | `storage.put/get/signedUrl()` | Local disk under `.data/uploads` (dev only) | S3-compatible bucket with signed URLs |
-| AI | `captureProviders` (`SpeechToText`, `ImageToText`, `LeadExtractor`); later `ask()` | Not connected: calls fail with a clear message; people use the manual form | Provider API (chosen with PTCC) |
+| AI capture | `providersFor(mode)` → `SpeechToText`, `ImageToText`, `LeadExtractor` | `simulated` (development and tests, clearly labelled) or `off` (production: "not available yet") | Provider API (chosen with PTCC; see §7) |
 | Tally | `tally.status()` | **Not connected** (the only state today) | To be designed with PTCC — see below |
 
 ### Tally — the accounting boundary

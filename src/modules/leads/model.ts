@@ -80,14 +80,37 @@ export const SOURCE_LABEL: Record<LeadSource, string> = {
   other: "Other",
 };
 
-/** How a lead entered the system. Photo/voice/text arrive with AI capture (Phase 3). */
+/** How a lead entered the system. Photo/voice/text are AI-assisted capture (Phase 3). */
 export const CAPTURE_METHODS = ["manual", "photo", "voice", "text"] as const;
 export type CaptureMethod = (typeof CAPTURE_METHODS)[number];
+
+export const AI_CAPTURE_METHODS = ["photo", "voice", "text"] as const;
+export type AiCaptureMethod = (typeof AI_CAPTURE_METHODS)[number];
+
+export const CAPTURE_METHOD_LABEL: Record<CaptureMethod, string> = {
+  manual: "Typed into the form",
+  photo: "Photo",
+  voice: "Voice",
+  text: "Typed description",
+};
 
 /** Languages voice capture must support (Phase 3). Stored data is language-independent. */
 export const CAPTURE_LANGUAGES = ["en", "kn", "hi"] as const;
 export type CaptureLanguage = (typeof CAPTURE_LANGUAGES)[number];
 export const LANGUAGE_LABEL: Record<CaptureLanguage, string> = { en: "English", kn: "Kannada", hi: "Hindi" };
+/** How each language names itself — shown next to the English name when choosing. */
+export const LANGUAGE_NATIVE: Record<CaptureLanguage, string> = { en: "English", kn: "ಕನ್ನಡ", hi: "हिन्दी" };
+
+/** A capture's language: chosen or detected; "unknown" when neither. */
+export const DETECTED_LANGUAGES = ["en", "kn", "hi", "unknown"] as const;
+export type DetectedLanguage = (typeof DETECTED_LANGUAGES)[number];
+
+/**
+ * A capture is a draft until the employee confirms it (exactly one lead is created) or
+ * cancels it. "failed" = recognition or extraction failed; nothing was created.
+ */
+export const CAPTURE_STATUSES = ["draft", "confirmed", "discarded", "failed"] as const;
+export type CaptureStatus = (typeof CAPTURE_STATUSES)[number];
 
 export const CALL_OUTCOMES = ["connected", "no_answer", "busy", "switched_off", "wrong_number"] as const;
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];

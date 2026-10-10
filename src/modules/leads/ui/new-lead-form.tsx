@@ -92,7 +92,7 @@ export function NewLeadForm({
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field id="branchId" label="Branch" error={errors.branchId} hint={!branchId ? "The CEO's office will decide which branch takes it." : undefined}>
+        <Field id="branchId" label="Branch" error={errors.branchId} hint={!branchId ? "Admin or the CEO's office will route it to the right branch." : undefined}>
           <Select
             {...describedBy("branchId", errors.branchId, !branchId)}
             name="branchId"
@@ -104,7 +104,7 @@ export function NewLeadForm({
                 {branch.name}
               </option>
             ))}
-            <option value="">Not sure — needs assignment</option>
+            <option value="">Not sure which branch</option>
           </Select>
         </Field>
         {marketers && (

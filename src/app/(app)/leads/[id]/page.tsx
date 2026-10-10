@@ -15,7 +15,8 @@ import { formatPhone } from "@/lib/phone";
 import { companyToday, dueGroup, formatDue, formatTimestamp } from "@/lib/time";
 import { listActiveBranches } from "@/modules/customers/queries";
 import { canAssignLead, canNoteLead, canReopenLead, canSetLeadBranch, canWorkLead } from "@/modules/leads/access";
-import { isOpenStage, leadRef, QUOTATION_STATUS_LABEL, quotationRef, SOURCE_LABEL, STAGE_LABEL } from "@/modules/leads/model";
+import { CAPTURE_METHOD_LABEL, isOpenStage, LANGUAGE_LABEL, leadRef, QUOTATION_STATUS_LABEL, quotationRef, SOURCE_LABEL, STAGE_LABEL } from "@/modules/leads/model";
+import { getLeadCaptureInfo } from "@/modules/leads/capture-service";
 import { getLead, getLeadQuotations, getLeadRequirements, listActivities, listMarketers } from "@/modules/leads/queries";
 import { ActivityTimeline } from "@/modules/leads/ui/activity-timeline";
 import { BranchTag, ScopeStatusBadge, StagePill } from "@/modules/leads/ui/badges";
@@ -61,12 +62,13 @@ async function LeadDetail({
   // Routers (Admin) and people who only add leads may not have access to the customer page.
   const readsCustomers = canAny(ctx.actor, "customer.read", "customer.read.all");
   const open = isOpenStage(lead.stage);
-  const [requirements, quotations, activities, marketers, branches] = await Promise.all([
+  const [requirements, quotations, activities, marketers, branches, captured] = await Promise.all([
     getLeadRequirements(ctx, lead),
     getLeadQuotations(ctx, lead.id),
     listActivities(ctx, { leadId: lead.id }),
     canAssign && lead.branchId ? listMarketers(ctx, lead.branchId) : Promise.resolve(null),
     canMove ? listActiveBranches(ctx) : Promise.resolve(null),
+    lead.captureMethod === "manual" ? Promise.resolve(null) : getLeadCaptureInfo(ctx, lead.id),
   ]);
 
   const today = companyToday(ctx.now);
@@ -92,7 +94,7 @@ async function LeadDetail({
               ? "It's yours — the next follow-up will show in My Work."
               : lead.branchId
                 ? `${lead.branchName}'s coordinators have been asked to assign an owner.`
-                : "The CEO's office has been asked to decide which branch takes it."}
+                : "Admin and the CEO's office have been asked to decide which branch takes it."}
         </Notice>
       )}
       {query.quoted && <Notice tone="success">Quotation created as a draft. Mark it sent once it has gone to the customer.</Notice>}
@@ -300,6 +302,36 @@ async function LeadDetail({
               </div>
             )}
           </Fact>
+          {captured && (
+            <Fact label="Captured">
+              <span>
+                {CAPTURE_METHOD_LABEL[captured.method]}
+                {captured.language !== "unknown" ? ` · ${LANGUAGE_LABEL[captured.language]}` : ""} · {captured.capturedByName},{" "}
+                {formatTimestamp(captured.createdAt, ctx.now)}
+              </span>
+              {captured.simulated && (
+                <span className="mt-1 block text-sm font-medium text-warning-700">
+                  Simulated capture{captured.sampleLabel ? ` (${captured.sampleLabel})` : ""} — development data
+                </span>
+              )}
+              {captured.originalText && (
+                <details className="mt-2 text-sm">
+                  <summary className="cursor-pointer font-medium text-brand-600 hover:text-brand-700">
+                    {captured.method === "voice" ? "Original transcript" : captured.method === "photo" ? "Text read from the photo" : "Original text"}
+                  </summary>
+                  <p className="mt-1 whitespace-pre-line text-ink-muted" lang={captured.language === "unknown" ? undefined : captured.language}>
+                    {captured.originalText}
+                  </p>
+                  {captured.editedText && (
+                    <>
+                      <p className="mt-2 font-medium">Corrected by {captured.capturedByName}</p>
+                      <p className="whitespace-pre-line text-ink-muted">{captured.editedText}</p>
+                    </>
+                  )}
+                </details>
+              )}
+            </Fact>
+          )}
         </Facts>
       </Panel>
 

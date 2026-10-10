@@ -4,7 +4,9 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { actionError, type ActionState } from "@/server/action-result";
 import { requireContext } from "@/server/auth/current";
+import { NotFoundError } from "@/server/errors";
 import { formDataToObject } from "@/server/validation";
+import { confirmCapture, discardCapture } from "./capture-service";
 import {
   addLeadNote,
   addRequirement,
@@ -38,36 +40,71 @@ async function run(formData: FormData, fn: () => Promise<unknown>, message?: str
   }
 }
 
+/** The lead fields of the New lead form and the capture review form (same names). */
+function leadInput(formData: FormData): CreateLeadInput {
+  return {
+    companyId: optional(formData, "companyId"),
+    companyName: optional(formData, "companyName"),
+    industry: optional(formData, "industry"),
+    companyPhone: optional(formData, "companyPhone"),
+    companyWebsite: optional(formData, "companyWebsite"),
+    addressLine: optional(formData, "addressLine"),
+    area: optional(formData, "area"),
+    city: optional(formData, "city"),
+    contactName: optional(formData, "contactName"),
+    contactDesignation: optional(formData, "contactDesignation"),
+    contactPhone: optional(formData, "contactPhone"),
+    contactEmail: optional(formData, "contactEmail"),
+    requirement: text(formData, "requirement"),
+    scopeEntryIds: formData.getAll("scopeEntryIds").map(String).filter(Boolean),
+    source: (optional(formData, "source") as CreateLeadInput["source"]) ?? undefined,
+    branchId: formData.has("branchId") ? text(formData, "branchId") : undefined,
+    ownerId: optional(formData, "ownerId"),
+    followUpDate: optional(formData, "followUpDate"),
+    followUpTime: optional(formData, "followUpTime"),
+    notes: optional(formData, "notes"),
+  };
+}
+
 export async function createLeadAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
   const values = formDataToObject(formData);
   let leadId: string;
   try {
     const ctx = await requireContext();
-    const input: CreateLeadInput = {
-      companyId: optional(formData, "companyId"),
-      companyName: optional(formData, "companyName"),
-      industry: optional(formData, "industry"),
-      companyPhone: optional(formData, "companyPhone"),
-      addressLine: optional(formData, "addressLine"),
-      area: optional(formData, "area"),
-      city: optional(formData, "city"),
-      contactName: optional(formData, "contactName"),
-      contactPhone: optional(formData, "contactPhone"),
-      contactEmail: optional(formData, "contactEmail"),
-      requirement: text(formData, "requirement"),
-      scopeEntryIds: formData.getAll("scopeEntryIds").map(String).filter(Boolean),
-      source: (optional(formData, "source") as CreateLeadInput["source"]) ?? undefined,
-      branchId: formData.has("branchId") ? text(formData, "branchId") : undefined,
-      ownerId: optional(formData, "ownerId"),
-      followUpDate: optional(formData, "followUpDate"),
-      followUpTime: optional(formData, "followUpTime"),
-      notes: optional(formData, "notes"),
-    };
-    ({ id: leadId } = await createLead(ctx, input));
+    ({ id: leadId } = await createLead(ctx, leadInput(formData)));
   } catch (error) {
     return actionError(error, values);
   }
   redirect(`/leads/${leadId}?created=1`);
+}
+
+/** "Confirm and create lead" on the capture review — the only way a capture becomes a lead. */
+export async function confirmCaptureAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const values = formDataToObject(formData);
+  let leadId: string;
+  try {
+    const ctx = await requireContext();
+    ({ leadId } = await confirmCapture(ctx, {
+      captureId: text(formData, "captureId"),
+      editedTranscript: optional(formData, "editedTranscript"),
+      lead: leadInput(formData),
+    }));
+  } catch (error) {
+    return actionError(error, values);
+  }
+  redirect(`/leads/${leadId}?created=1`);
+}
+
+/** "Cancel" on the capture review: nothing is created and the captured text is cleared. */
+export async function discardCaptureAction(formData: FormData): Promise<void> {
+  const ctx = await requireContext();
+  try {
+    await discardCapture(ctx, text(formData, "captureId"));
+  } catch (error) {
+    // Already gone or not mine — either way there is nothing to cancel.
+    if (!(error instanceof NotFoundError)) throw error;
+  }
+  redirect("/leads");
 }
 
 export async function logCallAction(_previous: ActionState, formData: FormData): Promise<ActionState> {

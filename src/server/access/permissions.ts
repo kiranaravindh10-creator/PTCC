@@ -45,7 +45,7 @@ export const PERMISSIONS = {
   "customer.write": { group: "Customers", description: "Add and edit customers and contacts; link a customer to my branch" },
 
   // Marketing
-  "lead.capture": { group: "Marketing", description: "Add a lead for any branch (or mark its branch as unknown)" },
+  "lead.capture": { group: "Marketing", description: "Add a lead for my branch (or mark its branch as unknown, to be routed)" },
   "marketing.read.own": { group: "Marketing", description: "See leads I own or added" },
   "marketing.read.branch": { group: "Marketing", description: "See all leads, calls and quotations in my branch" },
   "marketing.read.all": { group: "Marketing", description: "See leads of every branch, including leads waiting for a branch" },

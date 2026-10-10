@@ -12,7 +12,9 @@ Confirmed business rules — never work around them:
 - The lab stages are exactly Receiving → Calibration/Testing → Certificate → Dispatch.
 - The service scope comes only from PTCC's NABL documents (`data/scope/`). Never invent services, prices or branch capabilities; unknown means "Scope not confirmed — verify with PTCC" or "Needs verification".
 - One platform, four branches (Bengaluru, Chennai, Hosur from the certificates; Hyderabad from `data/branches/`, accreditation NOT verified). Branch-specific records carry `branch_id`; never guess a branch (null = "needs branch").
-- Lead routing: coordinators / marketing managers within their branch; Admin company-wide via `lead.route` (audited, never works leads); the CEO decides unknown branches.
+- Lead routing: coordinators / marketing managers within their branch; Admin company-wide via `lead.route` (audited, never works leads); the CEO decides unknown branches (the CEO and Admin are both notified of a lead with no branch).
+- New leads (form or capture) go to the creator's own branch or "Not sure which branch" (null); only the CEO and Admin create one in another branch (`canCreateLeadInBranch`, enforced in `createLeadInTx`).
+- AI capture (`src/modules/leads/capture*.ts`): AI output is an untrusted DRAFT. Only `confirmCapture` (the employee's explicit confirmation → `createLeadInTx`) creates a lead. Never invent fields; never infer a branch; follow-up dates are suggestions. Simulated providers must stay labelled and never run in production. Photos/recordings are not stored. Confirmed transcripts stay with the lead (visible only via `leadVisibility`) — provisionally: no retention policy is approved, so never invent a deletion period.
 
 ## How the code is put together
 

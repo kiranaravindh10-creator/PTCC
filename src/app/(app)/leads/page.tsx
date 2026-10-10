@@ -1,4 +1,4 @@
-import { Handshake, Plus, Search } from "lucide-react";
+import { Handshake, Plus, ScanText, Search } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -79,10 +79,16 @@ async function Leads({ searchParams }: { searchParams: PageProps<"/leads">["sear
         }
         actions={
           canAny(ctx.actor, "lead.capture", "marketing.work") ? (
-            <ButtonLink href="/leads/new" variant="primary">
-              <Plus aria-hidden />
-              Add lead
-            </ButtonLink>
+            <>
+              <ButtonLink href="/leads/capture" variant="secondary">
+                <ScanText aria-hidden />
+                Capture lead
+              </ButtonLink>
+              <ButtonLink href="/leads/new" variant="primary">
+                <Plus aria-hidden />
+                Add lead
+              </ButtonLink>
+            </>
           ) : undefined
         }
       />

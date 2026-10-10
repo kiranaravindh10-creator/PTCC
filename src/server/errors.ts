@@ -44,3 +44,13 @@ export class NotImplementedError extends AppError {
     super(message);
   }
 }
+
+/** A capture provider couldn't process the photo, recording or text (message is shown to the person). */
+export class CaptureProcessingError extends AppError {}
+
+/** Too many requests in a short time (abuse control). */
+export class RateLimitError extends AppError {
+  constructor(message = "Too many attempts. Please wait a few minutes and try again.") {
+    super(message);
+  }
+}

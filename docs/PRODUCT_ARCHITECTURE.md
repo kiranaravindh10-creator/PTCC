@@ -162,10 +162,10 @@ These are built once and used by every module:
 
 ## 7. Key end-to-end workflows
 
-**Lead (Phase 2; AI capture in Phase 3)**
+**Lead (Phase 2; AI-assisted capture in Phase 3)**
 
-1. Any employee adds a lead. In Phase 3 this can also be by voice in English, Kannada or Hindi, by photo or by text, with AI drafting the form and the employee reviewing and confirming.
-2. The lead goes to its **branch**. If the branch is unknown, it is marked *Needs branch* and the CEO decides; it is never guessed.
+1. Any employee adds a lead, with the form or with **Capture lead**: a photo of a card or board, speaking (English, Kannada, Hindi) or a few typed words. The capture is read into a draft, and the employee checks every field, keeps the branch as their own — or chooses "Not sure which branch" if the lead belongs elsewhere — and confirms. Only that confirmation creates the lead. Today the reading is **simulated** (clearly labelled); real recognition needs PTCC's choice of providers.
+2. The lead goes to its **branch**: the employee's own. If it is "Not sure which branch", it is marked *Needs branch*; the CEO and Admin are notified and either of them routes it. It is never guessed. Only the CEO and Admin add a lead straight to another branch.
 3. The branch's **marketing team**: a coordinator or marketing manager assigns an **employee**, unless the marketer added it themselves.
 4. The employee works it: call (with outcome), follow-ups in *My Work*, requirements checked against the branch's accredited scope, quotation.
 5. **Won** makes the company a customer of that branch. **Lost** records the reason.
@@ -210,6 +210,12 @@ From the Phase 2 verification brief:
 - **Quotations:** keep the internal `Q-1001` sequence. Prices are typed by people, because there is no approved price list.
 - **Tally:** the version is unknown and it runs on an office computer or the local network. What data should be exchanged is not decided yet.
 
+From the Phase 3 review:
+
+- **New leads stay in the employee's branch.** An employee adds a lead (form or capture) for their own branch, or marks it "Not sure which branch" for the CEO or Admin to route. Only the CEO and Admin add a lead straight to another branch. Routing afterwards is unchanged.
+- **Leads with no branch notify both the CEO and Admin**, so either can route them.
+- **Capture transcripts** are kept with the confirmed lead and shown only to people who can see the lead. Photos and recordings are not stored. Keeping transcripts indefinitely is **provisional**: PTCC has not approved a retention policy yet (open question 7).
+
 ## 10. Open questions for PTCC
 
 1. **Hyderabad accreditation:** the NABL certificate number, validity dates and scope annexure, if Hyderabad is accredited.
@@ -222,3 +228,4 @@ From the Phase 2 verification brief:
 4. **Lab:** sign-offs within stages, the certificate format, and record retention.
 5. **AI capture:** the provider, and where audio of customer conversations may be processed.
 6. **WhatsApp:** an existing WhatsApp Business number to move to the Business Platform (Cloud API)?
+7. **Capture transcripts:** how long they are kept and who may delete them. Needed before capture is used in production.

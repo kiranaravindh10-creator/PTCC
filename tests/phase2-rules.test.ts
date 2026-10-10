@@ -229,17 +229,18 @@ describe("lead routing", () => {
     // Another branch's marketer gets "not found" for the lead and its history.
     expect(await getLead(lavanya, blrLead)).toBeNull();
     expect(await listActivities(lavanya, { leadId: blrLead })).toEqual([]);
-    // Capturing for another branch is allowed (brief: anyone can pass a lead on) — choosing its owner is not.
-    await expect(
-      createLead(rahul, { companyName: "Kothapet Pumps", requirement: "Flow meter calibration", branchId: hyderabad, ownerId: lavanya.actor.id }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
-    const { id } = await createLead(rahul, { companyName: "Kothapet Pumps", requirement: "Flow meter calibration", branchId: hyderabad });
-    expect((await getLead(rahul, id))).toMatchObject({ branchId: hyderabad, ownerId: null });
-    await expect(assignLead(rahul, { leadId: id, ownerId: lavanya.actor.id })).rejects.toBeInstanceOf(ForbiddenError);
-    // A made-up branch ID is refused.
-    await expect(
-      createLead(rahul, { companyName: "Nowhere Ltd", requirement: "Calibration", branchId: "00000000-0000-4000-8000-000000000000" }),
-    ).rejects.toBeInstanceOf(ValidationError);
+    // A new lead can't be put straight into another branch, with or without an owner…
+    const pumps = { companyName: "Kothapet Pumps", requirement: "Flow meter calibration" };
+    await expect(createLead(rahul, { ...pumps, branchId: hyderabad, ownerId: lavanya.actor.id })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createLead(rahul, { ...pumps, branchId: hyderabad })).rejects.toBeInstanceOf(ForbiddenError);
+    // …it goes through "Not sure which branch" and is routed by the CEO or Admin.
+    const { id } = await createLead(rahul, { ...pumps, branchId: "" });
+    expect(await getLead(rahul, id)).toMatchObject({ branchId: null, ownerId: null });
+    await expect(assignLead(rahul, { leadId: id, ownerId: lavanya.actor.id })).rejects.toBeInstanceOf(ValidationError);
+    // A made-up branch ID is refused — for an employee before any lookup, for the CEO as invalid.
+    const nowhere = { companyName: "Nowhere Ltd", requirement: "Calibration", branchId: "00000000-0000-4000-8000-000000000000" };
+    await expect(createLead(rahul, nowhere)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createLead(ceo, nowhere)).rejects.toBeInstanceOf(ValidationError);
   });
 });
 

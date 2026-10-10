@@ -35,7 +35,15 @@ import { parseRupeesToPaise } from "@/lib/money";
 import { createCompanyRecord, ensureCompanyBranch, findOrCreateContact, markCustomerOfBranch } from "@/modules/customers/internal";
 import { notify, type NotificationInput } from "@/modules/notifications/service";
 import { cancelOpenLeadTasks, insertTask, reassignOpenLeadTasks } from "@/modules/tasks/internal";
-import { canAssignLead, canManageBranchLeads, canNoteLead, canReopenLead, canSetLeadBranch, canWorkLead } from "./access";
+import {
+  canAssignLead,
+  canCreateLeadInBranch,
+  canManageBranchLeads,
+  canNoteLead,
+  canReopenLead,
+  canSetLeadBranch,
+  canWorkLead,
+} from "./access";
 import { recordActivity } from "./activity";
 import {
   advancedStage,
@@ -48,10 +56,14 @@ import {
   quotationRef,
   STAGE_LABEL,
   STAGE_ORDER,
+  type AiCaptureMethod,
+  type DetectedLanguage,
   type LeadStage,
   type QuotationStatus,
 } from "./model";
 import { leadVisibility } from "./queries";
+
+const WEBSITE = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/\S*)?$/i;
 
 /**
  * Marketing actions. Each validates input, applies branch-aware access rules (access.ts),
@@ -76,8 +88,10 @@ export const createLeadSchema = z
     area: optionalText(80),
     city: optionalText(80),
     contactName: optionalText(120),
+    contactDesignation: optionalText(120),
     contactPhone: optionalPhone,
     contactEmail: optionalEmail,
+    companyWebsite: optionalText(200).refine((value) => !value || WEBSITE.test(value), "Enter a website like www.example.com."),
     requirement: requiredText(500, "Say what the customer needs."),
     scopeEntryIds: z.array(z.uuid()).max(20).default([]),
     source: z.enum(LEAD_SOURCES).default("employee"),
@@ -93,17 +107,49 @@ export const createLeadSchema = z
   .refine((v) => !v.followUpTime || v.followUpDate, { path: ["followUpDate"], message: "Choose a date for this time." });
 
 export type CreateLeadInput = z.input<typeof createLeadSchema>;
+export type CreateLeadData = z.output<typeof createLeadSchema>;
 
-export async function createLead(ctx: Ctx, input: CreateLeadInput): Promise<{ id: string; number: number }> {
+export type CreateLeadOptions = {
+  /** Set when the lead came from an AI-assisted capture (capture-service.ts). */
+  capture?: {
+    id: string;
+    method: AiCaptureMethod;
+    language: DetectedLanguage;
+    provider: string;
+    simulated: boolean;
+    editedFields: string[];
+  };
+};
+
+export async function createLead(ctx: Ctx, input: CreateLeadInput, options: CreateLeadOptions = {}): Promise<{ id: string; number: number }> {
   if (!canAny(ctx.actor, "lead.capture", "marketing.work")) throw new ForbiddenError();
   const data = parseInput(createLeadSchema, input);
+  return ctx.db.transaction((tx) => createLeadInTx(tx, ctx, data, options));
+}
 
-  return ctx.db.transaction(async (tx) => {
+/**
+ * createLead inside the caller's transaction — so a capture confirmation creates the lead and
+ * marks the capture confirmed atomically. Callers must check permission and parse input first
+ * (createLead does both).
+ */
+export async function createLeadInTx(
+  tx: Transaction,
+  ctx: Ctx,
+  data: CreateLeadData,
+  options: CreateLeadOptions = {},
+): Promise<{ id: string; number: number }> {
+  {
     // Branch: chosen, "" for unknown, or mine by default. Never guessed.
     let branchId: string | null =
       data.branchId === undefined ? ctx.actor.branchId : data.branchId === "" ? null : data.branchId;
     if (branchId) {
       if (!z.uuid().safeParse(branchId).success) throw new ValidationError(CHECK_FIELDS, { branchId: "Choose a branch." });
+      // Own branch or "Not sure which branch" — another branch only for company-wide routers.
+      if (!canCreateLeadInBranch(ctx.actor, branchId)) {
+        throw new ForbiddenError(
+          "You can add leads for your own branch. If it belongs to another branch, choose “Not sure which branch” and it will be routed.",
+        );
+      }
       branchId = await requireActiveBranchId(tx, branchId);
     }
 
@@ -116,12 +162,14 @@ export async function createLead(ctx: Ctx, input: CreateLeadInput): Promise<{ id
           addressLine: data.addressLine,
           area: data.area,
           city: data.city,
+          website: data.companyWebsite,
         });
     const contact = await findOrCreateContact(tx, {
       companyId: company.id,
       name: data.contactName,
       phone: data.contactPhone,
       email: data.contactEmail,
+      designation: data.contactDesignation,
       actorId: ctx.actor.id,
     });
 
@@ -144,7 +192,7 @@ export async function createLead(ctx: Ctx, input: CreateLeadInput): Promise<{ id
         contactId: contact?.id ?? null,
         requirement: data.requirement,
         source: data.source,
-        captureMethod: "manual",
+        captureMethod: options.capture?.method ?? "manual",
         ownerId: ownerUser?.id ?? null,
         assignedBy: ownerUser ? ctx.actor.id : null,
         assignedAt: ownerUser ? ctx.now : null,
@@ -187,16 +235,32 @@ export async function createLead(ctx: Ctx, input: CreateLeadInput): Promise<{ id
       await notify(tx, routers.map((id) => ({ ...common, recipientId: id, type: "lead.needs_branch", title: `${title} — needs a branch` })));
     }
 
+    const capture = options.capture;
     await writeAudit(tx, {
       actorId: ctx.actor.id,
       action: "lead.create",
       entityType: "lead",
       entityId: lead!.id,
-      summary: `${leadRef(lead!.number)} ${company.name}: ${data.requirement}`,
+      summary: `${leadRef(lead!.number)} ${company.name}: ${data.requirement}${
+        capture ? ` (captured by ${capture.method}${capture.simulated ? ", simulated" : ""})` : ""
+      }`,
+      changes: {
+        branchId: [null, branchId],
+        ...(capture
+          ? {
+              captureId: [null, capture.id],
+              captureMethod: [null, capture.method],
+              captureLanguage: [null, capture.language],
+              captureProvider: [null, capture.provider],
+              simulated: [null, capture.simulated],
+              editedFields: [null, capture.editedFields],
+            }
+          : {}),
+      },
       meta: ctx.meta,
     });
     return lead!;
-  });
+  }
 }
 
 // ─── Edit ──────────────────────────────────────────────────────────────────
@@ -1028,13 +1092,16 @@ async function leadManagersOf(tx: Transaction, branchId: string): Promise<string
   return rows.map((row) => row.id);
 }
 
-/** People who decide which branch a lead belongs to (marketing.assign.all). */
+/**
+ * People who decide which branch a lead belongs to: marketing.assign.all (the CEO) and
+ * lead.route (Admin). Each person once, even if they hold both.
+ */
 async function companyWideLeadRouters(tx: Transaction): Promise<string[]> {
   const rows = await tx
     .selectDistinct({ id: users.id })
     .from(users)
     .innerJoin(userRoles, eq(userRoles.userId, users.id))
     .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
-    .where(and(eq(users.status, "active"), eq(rolePermissions.permissionKey, "marketing.assign.all")));
+    .where(and(eq(users.status, "active"), inArray(rolePermissions.permissionKey, ["marketing.assign.all", "lead.route"])));
   return rows.map((row) => row.id);
 }
