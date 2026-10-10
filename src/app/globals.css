@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * PTCC design tokens — see docs/DESIGN_SYSTEM.md.
+ * Colours come from the PTCC logo (blue #1482C3, pink #D42D5D) on warm neutrals.
+ * Every value here is a token; components never use raw hex values.
+ */
+@theme {
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* Brand */
+  --color-brand-50: #eef6fb;
+  --color-brand-100: #d8eaf6;
+  --color-brand-200: #b3d5ec;
+  --color-brand-500: #1482c3; /* logo blue — marks, focus, selection */
+  --color-brand-600: #0f6fa8; /* primary actions and links (5.4:1) */
+  --color-brand-700: #0b5a8a; /* hover / pressed */
+  --color-accent-50: #fcedf2;
+  --color-accent-500: #d42d5d; /* logo pink — brand mark, unread dot only */
+
+  /* Neutrals */
+  --color-canvas: #f6f6f3;
+  --color-surface: #ffffff;
+  --color-subtle: #efefeb;
+  --color-line: #e2e2dc;
+  --color-line-strong: #cbcbc4;
+  --color-ink: #1a1c1e;
+  --color-ink-muted: #5b5f66;
+  --color-ink-subtle: #6e727a;
+
+  /* Semantic */
+  --color-success-50: #e9f5ec;
+  --color-success-700: #1e7a3c;
+  --color-warning-50: #fff4e0;
+  --color-warning-700: #8f5200;
+  --color-danger-50: #fdecea;
+  --color-danger-600: #c4320a;
+  --color-danger-700: #b42318;
+  --color-teal-50: #e4f3f1;
+  --color-teal-700: #0e6159;
+
+  /* Type scale (rem; root is 16px on phones, 15px on desktop) */
+  --text-display: 2rem;
+  --text-display--line-height: 2.5rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+
+  --shadow-float: 0 1px 2px rgb(26 28 30 / 0.06), 0 8px 24px rgb(26 28 30 / 0.08);
+}
+
+@layer base {
+  html {
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (min-width: 1024px) {
+    html {
+      font-size: 93.75%; /* 15px — slightly denser on desktop */
+    }
+  }
+
+  body {
+    @apply bg-canvas font-sans text-base text-ink antialiased;
+    font-feature-settings: "kern";
+  }
+
+  /* One focus treatment for everything interactive. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
+  }
+
+  ::selection {
+    background: var(--color-brand-100);
+  }
+
+  summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

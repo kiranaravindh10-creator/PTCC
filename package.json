@@ -1,0 +1,51 @@
+{
+  "name": "ptcc",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --conditions=react-server scripts/db-migrate.ts",
+    "db:sync-access": "tsx --conditions=react-server scripts/sync-access.ts",
+    "db:setup": "npm run db:migrate && npm run db:sync-access && npm run scope:import && npm run branches:import",
+    "db:seed": "tsx --conditions=react-server scripts/seed-dev.ts",
+    "db:reset": "tsx --conditions=react-server scripts/db-reset.ts",
+    "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "scope:import": "tsx --conditions=react-server scripts/import-scope.ts",
+    "branches:import": "tsx --conditions=react-server scripts/import-branches.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "drizzle-orm": "^0.45.3",
+    "lucide-react": "^1.53.0",
+    "next": "16.4.0",
+    "postgres": "^3.4.9",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

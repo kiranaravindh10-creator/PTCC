@@ -1,0 +1,8 @@
+{
+  "note": "Which PTCC branch each NABL accreditation certificate belongs to. Confirmed by PTCC in the Phase 2 brief (8 October 2026); each also matches the facility address printed on the certificate. Certificates not listed here are imported with their branch marked 'Needs verification'.",
+  "branches": [
+    { "certificateNumber": "CC-2467", "branchName": "Bengaluru", "city": "Bengaluru", "state": "Karnataka" },
+    { "certificateNumber": "CC-2822", "branchName": "Chennai", "city": "Chennai", "state": "Tamil Nadu" },
+    { "certificateNumber": "CC-3649", "branchName": "Hosur", "city": "Hosur", "state": "Tamil Nadu" }
+  ]
+}

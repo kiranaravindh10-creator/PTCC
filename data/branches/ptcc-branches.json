@@ -1,0 +1,18 @@
+{
+  "format": "ptcc-branches/v1",
+  "note": "Branch details supplied by PTCC (Phase 2 verification brief, 9 October 2026). Contact details only: accreditation comes exclusively from NABL documents imported with `npm run scope:import`. A branch listed here without a certificate in data/scope/ has NO accredited scope in the platform.",
+  "branches": [
+    {
+      "name": "Hyderabad",
+      "addressLine": "204, New Nagole Main Road, Kishanbag, Maruthi Nagar, Kothapet",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "pincode": "500102",
+      "phone": "94883 78156",
+      "email": "precisehyd@precisetcc.com",
+      "mapsUrl": "https://www.google.com/maps/place/204,+New+Nagole+Main+Rd,+Kishanbag,+Maruthi+Nagar,+Kothapet,+Hyderabad,+Telangana+500102/@17.372305,78.545441,1601m/data=!3m1!1e3!4m5!3m4!1s0x3bcb98c2cfa2fbab:0xb04654dd5659731f!8m2!3d17.3723047!4d78.5454414",
+      "description": "PTCC Hyderabad has qualified staff and engineers and provides calibration services across Hyderabad and surrounding areas.",
+      "notes": "NABL accreditation not yet verified: the certificate number, validity dates and accredited scope have not been supplied. No service is shown as accredited at Hyderabad until PTCC provides the official documents."
+    }
+  ]
+}
